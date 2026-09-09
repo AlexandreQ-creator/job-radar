@@ -1,0 +1,10 @@
+
+playwright==1.62.0
+requests==2.34.2
+python-dotenv==1.2.2
+pytest==9.1.1
+# Opcional: só é importado em runtime (core/ia_resumo.py) se ANTHROPIC_API_KEY
+# estiver configurada. Sem a chave, o projeto roda igual sem essa dependência
+# nunca ser chamada — mas ela precisa estar instalada pra quem for ativar o
+# resumo de vaga por IA.
+anthropic>=0.40.0

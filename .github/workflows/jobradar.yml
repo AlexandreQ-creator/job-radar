@@ -1,0 +1,122 @@
+name: JobRadar
+
+on:
+  schedule:
+    - cron: "0 */3 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: jobradar-cycle
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  buscar-vagas:
+    runs-on: ubuntu-latest
+    # Sem isso, o padrão do GitHub Actions é 6h (360min) — uma fonte travada
+    # (ex: Catho com timeout de anti-bot, ou LinkedIn rate-limitado)
+    # consumiria até 6h de cada vez. Com concurrency.cancel-in-progress:
+    # false, um run travado também bloqueia o próximo ciclo inteiro, porque
+    # o run seguinte fica na fila esperando o anterior liberar o grupo. 150
+    # min dá folga real sobre a duração medida do ciclo (~1h30-2h com toda a
+    # paginação e a passada dupla do LinkedIn) e ainda fica abaixo do
+    # intervalo do cron (3h), então um run truncado nunca empilha em cima
+    # do próximo agendado.
+    timeout-minutes: 150
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Rodar JobRadar (um ciclo de cada perfil)
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        # Antes disso só o perfil Brasil rodava aqui — main_intl.py existia
+        # no repositório mas nunca foi chamado pelo workflow, então o
+        # pipeline internacional nunca rodou de verdade em produção. Agora é
+        # um projeto só com dois perfis selecionáveis (ver core/perfis.py); os
+        # dois rodam na mesma execução/commit, um após o outro.
+        run: python main.py --perfil brasil internacional --once
+
+      - name: Salvar vagas já vistas (evita notificação duplicada)
+        run: |
+          git config user.name "jobradar-bot"
+          git config user.email "jobradar-bot@users.noreply.github.com"
+
+          # O banco produzido por ESTA execução, guardado fora da árvore do
+          # repositório. É a única coisa deste run que sobrevive ao passo
+          # abaixo — todo o resto é descartado e retomado do GitHub.
+          if [ ! -f data/jobs.db ]; then
+            echo "data/jobs.db não existe ao fim do ciclo — nada a salvar."
+            exit 1
+          fi
+          cp data/jobs.db "${RUNNER_TEMP:-/tmp}/jobs.db"
+
+          # MEDIDO (18/08): este passo usava
+          #
+          #     git rebase origin/main -X theirs
+          #
+          # pra reenviar quando o push era recusado. Na madrugada de 18/08 o
+          # histórico do repositório foi reescrito enquanto uma execução
+          # estava no ar (ela começou 21h e terminou 23h12). Ao ser recusada,
+          # ela caiu nesse rebase e REAPLICOU commits antigos por cima do
+          # estado novo, com "-X theirs" resolvendo a favor da versão do run.
+          # Resultado: main.py e core/config.py voltaram atrás e duas
+          # correções foram desfeitas em produção — descoberto só quando a
+          # usuária relatou que uma notificação parou de chegar.
+          #
+          # Prova de autoria do commit que reverteu (75de7b6): autor
+          # "liliam" (autoria original preservada no replay) mas committer
+          # "jobradar-bot", no mesmo segundo do commit deste passo.
+          #
+          # O robô não tem motivo NENHUM pra escrever arquivo de código. Em
+          # vez de reaplicar commits em cima do estado remoto, ele agora
+          # ADOTA o estado remoto inteiro e recoloca só o banco por cima.
+          # A diferença importa: reaplicar commit pode trazer junto qualquer
+          # coisa que estava naquele commit; recolocar um arquivo só não
+          # pode. Qualquer commit gerado aqui contém data/jobs.db e mais
+          # nada — verificado em simulação com divergência máxima (duas
+          # correções de código + reescrita de histórico ao mesmo tempo).
+          #
+          # Efeito colateral bom: se alguém enviar correção de código no meio
+          # de um ciclo, o robô passa a INCORPORAR essa correção em vez de
+          # disputar com ela.
+          n=0
+          while :; do
+            git fetch origin main
+            git reset --hard origin/main
+
+            cp "${RUNNER_TEMP:-/tmp}/jobs.db" data/jobs.db
+            git add data/jobs.db
+
+            if git diff --cached --quiet; then
+              echo "Nada novo pra commitar."
+              exit 0
+            fi
+
+            git commit -m "chore: atualiza vagas vistas [skip ci]"
+
+            if git push; then
+              exit 0
+            fi
+
+            n=$((n + 1))
+            if [ "$n" -ge 5 ]; then
+              echo "Push falhou depois de 5 tentativas."
+              exit 1
+            fi
+            echo "Push rejeitado, sincronizando (tentativa $n)..."
+            sleep $((RANDOM % 5 + 1))
+          done
