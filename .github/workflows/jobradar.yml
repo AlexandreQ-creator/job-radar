@@ -1,8 +1,15 @@
 name: JobRadar
 
+# DESATIVADO (2026-09-09): schedule comentado de propósito. Este workflow
+# depende de secrets (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID) não configurados
+# neste repositório e de data/jobs.db sendo versionado, o que este fork
+# deliberadamente não faz (ver .gitignore) para não publicar o histórico
+# real de busca do usuário. Rodar via "workflow_dispatch" (manual) só depois
+# de decidir se vale configurar os secrets e adaptar o passo de persistência
+# do banco para este repositório.
 on:
-  schedule:
-    - cron: "0 */3 * * *"
+  # schedule:
+  #   - cron: "0 */3 * * *"
   workflow_dispatch: {}
 
 concurrency:
