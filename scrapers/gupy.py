@@ -58,6 +58,29 @@ def classificar_timeout(corpo: str, pagina: int) -> str:
     return "falha"
 
 
+def _montar_job(card_data: dict) -> Job | None:
+    """Converte os campos já extraídos de um card em Job. None quando o
+    card não tem o mínimo pra virar vaga (sem título ou sem link).
+
+    Separada da navegação Playwright de propósito — é a parte que vale
+    testar, com um dict de exemplo, sem precisar de browser (mesmo padrão
+    de scrapers/senior.py::montar_job e scrapers/simplify.py::_montar_job)."""
+    titulo = (card_data.get("titulo") or "").strip()
+    link = card_data.get("link")
+    if not titulo or not link:
+        return None
+
+    return Job(
+        titulo=titulo,
+        empresa=(card_data.get("empresa") or "Não informado").strip(),
+        local=(card_data.get("local") or "Não informado").strip(),
+        link=link,
+        site="Gupy",
+        publicado_em=card_data.get("publicado_em") or "",
+        modalidade=card_data.get("modalidade") or "",
+    )
+
+
 class GupyScraper(BaseScraper):
     """Busca vagas no portal público da Gupy (https://portal.gupy.io)."""
 
@@ -153,20 +176,18 @@ class GupyScraper(BaseScraper):
                                     break
 
                             link = card.get_attribute("href")
-                            if not link:
-                                continue
-
                             publicado_em = extrair_data_publicacao(card.inner_text())
 
-                            vagas.append(Job(
-                                titulo=titulo,
-                                empresa=empresa,
-                                local=cidade,
-                                link=link,
-                                site="Gupy",
-                                publicado_em=publicado_em,
-                                modalidade=modelo,
-                            ))
+                            job = _montar_job({
+                                "titulo": titulo,
+                                "empresa": empresa,
+                                "local": cidade,
+                                "link": link,
+                                "publicado_em": publicado_em,
+                                "modalidade": modelo,
+                            })
+                            if job is not None:
+                                vagas.append(job)
                         except Exception as e:
                             logger.warning(f"[Gupy] Erro ao processar card: {e}")
                             continue
