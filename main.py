@@ -6,8 +6,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timezone
 
-from core.config import DIGEST_HORA_UTC, INTERVALO_MINUTOS, LIMIAR_DIGEST_IMEDIATO
-from core.ia_resumo import gerar_resumo
+from core.config import DIGEST_HORA_UTC, INTERVALO_MINUTOS
 from database.database import (
     BancoVazioSuspeito,
     definir_metadado,
@@ -16,14 +15,12 @@ from database.database import (
     marcar_digest_enviado,
     obter_metadado,
     obter_vagas_pendentes_digest,
-    salvar_vaga,
 )
 from notifier.telegram import (
     enviar_digest,
     enviar_mensagem,
-    notificar_vaga,
-    notificar_vaga_exploratoria,
     processar_feedback_pendente,
+    publicar_vaga,
 )
 from core.perfis import FREQUENCIA_ALTA, PERFIS, Perfil
 from utils.filtro import filtrar_vagas
@@ -334,90 +331,28 @@ def ciclo_de_busca(perfil: Perfil):
 
             total_filtradas += len(vagas_filtradas) + len(vagas_secundarias)
 
+            # Item 08: só notifica na hora quando a relevância passa do
+            # limiar (ver LIMIAR_DIGEST_IMEDIATO em config.py) — abaixo
+            # disso, vai pra fila do digest diário sem mensagem individual
+            # (ver _enviar_digest_diario). O protocolo completo (resumo por
+            # IA, decisão imediato-vs-digest, notificar-antes-de-salvar) fica
+            # em notifier.telegram.publicar_vaga — ver esse módulo pro
+            # raciocínio de cada passo (ticket 03 do relatório de
+            # arquitetura: era duplicado aqui em dois loops de ~35 linhas).
             novas_da_fonte = 0
             for vaga in vagas_filtradas:
                 if ja_vista(vaga):
                     continue
-
-                # Item 08: só notifica na hora quando a relevância passa do
-                # limiar (ver LIMIAR_DIGEST_IMEDIATO em config.py) — abaixo
-                # disso, vai pra fila do digest diário sem mensagem
-                # individual (ver _enviar_digest_diario). Fila é salvar com
-                # digest_pendente=True: não tem "notificação que pode
-                # falhar" nesse caminho (a mensagem só sai no digest, depois),
-                # então salvar direto não arrisca perder a vaga do jeito que
-                # salvar ANTES de notificar arriscava no caminho imediato.
-                #
-                # MEDIDO: vaga com Job.publicacao_antiga (publicado_em "há X
-                # meses/anos" — ver job.py) nunca vai pra notificação
-                # imediata, mesmo com relevância alta — score mede "bate com
-                # o que você procura", não "é recente". Site com pouco
-                # volume pra um termo deixa vaga de meses atrás na página
-                # visível (confirmado ao vivo: Sólides ordena por data, mas
-                # sem volume novo suficiente a antiga não sai da 1ª página).
-                # Não é descartada (mesma vaga ainda pode estar aberta) — só
-                # sai do caminho "🚨 urgente" e vai pro digest em lote.
-                if vaga.relevancia >= LIMIAR_DIGEST_IMEDIATO and not vaga.publicacao_antiga:
-                    # Resumo por IA (core/ia_resumo.py) só pras vagas que já
-                    # vão notificar na hora — mantém o volume de chamadas de
-                    # API por ciclo limitado às ~86 de score alto, não às
-                    # centenas que passam no filtro. Sem ANTHROPIC_API_KEY
-                    # configurada, gerar_resumo() devolve "" na hora, sem
-                    # tentar rede.
-                    vaga.resumo_ia = gerar_resumo(vaga)
-
-                    # Notifica ANTES de salvar. Se salvasse primeiro e o
-                    # Telegram falhasse, a vaga ficava marcada como "vista"
-                    # pra sempre — o próximo ciclo pulava ela em ja_vista()
-                    # e a vaga se perdia sem nunca ter sido notificada de
-                    # verdade.
-                    if not notificar_vaga(vaga):
-                        logger.warning(
-                            f"[{perfil.nome}] Falha ao notificar '{vaga.titulo}' - não marcada "
-                            "como vista, tenta de novo no próximo ciclo."
-                        )
-                        continue
-                    salvar_vaga(vaga, perfil_chave=perfil.chave)
-                    logger.info(f"[{perfil.nome}] Nova vaga: {vaga.titulo} - {vaga.empresa}")
-                else:
-                    salvar_vaga(vaga, perfil_chave=perfil.chave, digest_pendente=True)
-                    motivo_digest = "vaga antiga" if vaga.publicacao_antiga else f"relevância {vaga.relevancia}/10"
-                    logger.info(
-                        f"[{perfil.nome}] Nova vaga (digest, {motivo_digest}): "
-                        f"{vaga.titulo} - {vaga.empresa}"
-                    )
-
-                total_novas += 1
-                novas_da_fonte += 1
+                if publicar_vaga(vaga, perfil):
+                    total_novas += 1
+                    novas_da_fonte += 1
 
             for vaga in vagas_secundarias:
                 if ja_vista(vaga):
                     continue
-
-                # Mesma regra de vaga antiga do loop acima.
-                if vaga.relevancia >= LIMIAR_DIGEST_IMEDIATO and not vaga.publicacao_antiga:
-                    vaga.resumo_ia = gerar_resumo(vaga)
-                    if not notificar_vaga_exploratoria(vaga):
-                        logger.warning(
-                            f"[{perfil.nome}] Falha ao notificar '{vaga.titulo}' (exploratória) - "
-                            "não marcada como vista, tenta de novo no próximo ciclo."
-                        )
-                        continue
-                    salvar_vaga(vaga, perfil_chave=perfil.chave)
-                    logger.info(
-                        f"[{perfil.nome}] Nova vaga exploratória ({perfil.eixo_secundario_rotulo}): "
-                        f"{vaga.titulo} - {vaga.empresa}"
-                    )
-                else:
-                    salvar_vaga(vaga, perfil_chave=perfil.chave, digest_pendente=True, exploratoria=True)
-                    motivo_digest = "vaga antiga" if vaga.publicacao_antiga else f"relevância {vaga.relevancia}/10"
-                    logger.info(
-                        f"[{perfil.nome}] Nova vaga exploratória (digest, {motivo_digest}): "
-                        f"{vaga.titulo} - {vaga.empresa}"
-                    )
-
-                total_novas += 1
-                novas_da_fonte += 1
+                if publicar_vaga(vaga, perfil, exploratoria=True):
+                    total_novas += 1
+                    novas_da_fonte += 1
 
             # Funil por fonte: sem isso só dava pra ver bruta (por fonte) e
             # nova (só o total do ciclo) — o meio (quanto o filtro de

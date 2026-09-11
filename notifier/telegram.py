@@ -3,8 +3,9 @@ import json
 
 import requests
 
-from core.config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
-from database.database import definir_feedback, definir_metadado, obter_metadado
+from core.config import LIMIAR_DIGEST_IMEDIATO, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+from core.ia_resumo import gerar_resumo
+from database.database import definir_feedback, definir_metadado, obter_metadado, salvar_vaga
 from core.logger import get_logger
 
 logger = get_logger()
@@ -165,6 +166,67 @@ def notificar_vaga_exploratoria(job) -> bool:
         f"<b>Link:</b>\n{job.link}"
     )
     return enviar_mensagem(texto, reply_markup=_teclado_feedback(job.id))
+
+
+def publicar_vaga(vaga, perfil, *, exploratoria: bool = False) -> bool:
+    """O que acontece com uma vaga aprovada, do momento em que o filtro a
+    deixa passar até ela estar salva. Ticket 03 de
+    .scratch/melhorias-arquitetura/issues/ (relatório de arquitetura):
+    concentra num só lugar o protocolo que main.py::ciclo_de_busca tinha
+    duplicado em dois loops de ~35 linhas (eixo principal e eixo
+    exploratório/Ibéria), diferindo só em qual notificar_vaga* chamar e no
+    flag exploratoria.
+
+    Devolve True quando a vaga foi de fato processada (contou como "nova"),
+    False quando a notificação falhou e a vaga não foi marcada como vista
+    — nesses casos o chamador deve tentar de novo no próximo ciclo, não
+    contar como nova.
+
+    A ORDEM importa: notifica ANTES de salvar. Se salvasse primeiro e o
+    Telegram falhasse, a vaga ficava marcada como "vista" pra sempre — o
+    próximo ciclo pulava ela em ja_vista() e a vaga se perdia sem nunca ter
+    sido notificada de verdade (mesmo raciocínio que já estava em
+    main.py antes da extração, preservado aqui).
+
+    Mensagens de log preservadas byte a byte do main.py original (não é
+    "exploratória" gerada por template genérico) — main.py::ciclo_de_busca
+    tinha esses dois textos ligeiramente diferentes ("Nova vaga (digest,"
+    vs. "Nova vaga exploratória (digest,", sem "(exploratória)" solto entre
+    parênteses), e este ticket não pede mudar o texto observado no log."""
+    if vaga.relevancia >= LIMIAR_DIGEST_IMEDIATO and not vaga.publicacao_antiga:
+        # Resumo por IA só pras vagas que já vão notificar na hora — mantém
+        # o volume de chamadas de API por ciclo limitado às de score alto,
+        # não às centenas que passam no filtro. Sem ANTHROPIC_API_KEY
+        # configurada, gerar_resumo() devolve "" na hora, sem tentar rede.
+        vaga.resumo_ia = gerar_resumo(vaga)
+
+        notificar = notificar_vaga_exploratoria if exploratoria else notificar_vaga
+        falha_rotulo = "'{}' (exploratória) - ".format(vaga.titulo) if exploratoria else "'{}' - ".format(vaga.titulo)
+        if not notificar(vaga):
+            logger.warning(
+                f"[{perfil.nome}] Falha ao notificar {falha_rotulo}não "
+                "marcada como vista, tenta de novo no próximo ciclo."
+            )
+            return False
+
+        salvar_vaga(vaga, perfil_chave=perfil.chave, exploratoria=exploratoria)
+        if exploratoria:
+            logger.info(
+                f"[{perfil.nome}] Nova vaga exploratória ({perfil.eixo_secundario_rotulo}): "
+                f"{vaga.titulo} - {vaga.empresa}"
+            )
+        else:
+            logger.info(f"[{perfil.nome}] Nova vaga: {vaga.titulo} - {vaga.empresa}")
+    else:
+        salvar_vaga(vaga, perfil_chave=perfil.chave, digest_pendente=True, exploratoria=exploratoria)
+        motivo_digest = "vaga antiga" if vaga.publicacao_antiga else f"relevância {vaga.relevancia}/10"
+        rotulo_digest = "exploratória (digest" if exploratoria else "(digest"
+        logger.info(
+            f"[{perfil.nome}] Nova vaga {rotulo_digest}, {motivo_digest}): "
+            f"{vaga.titulo} - {vaga.empresa}"
+        )
+
+    return True
 
 
 # Margem sob o limite real do Telegram (4096 caracteres por mensagem) —
