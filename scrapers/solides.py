@@ -6,6 +6,7 @@ from playwright.sync_api import sync_playwright
 
 from core.job import Job, extrair_data_publicacao
 from core.logger import get_logger
+from scrapers._paginacao import ResultadoPagina, interpretar_timeout
 from scrapers.base import BaseScraper
 
 logger = get_logger()
@@ -40,11 +41,13 @@ TEXTO_SEM_RESULTADO = "Vaga não encontrada"
 _PADRAO_ZERO_VAGAS = re.compile(r"\b0 vaga\(s\) encontrada")
 
 
-def classificar_timeout(corpo: str, pagina: int) -> str:
+def classificar_timeout(corpo: str, pagina: int) -> ResultadoPagina:
     """O que significa estourar o tempo esperando os cards de uma página.
 
-    Devolve "vazio" (busca sem resultado nenhum), "fim" (a paginação acabou,
-    a página pedida não existe) ou "falha" (a página não carregou de verdade).
+    Detector específico da Sólides: procura o texto de "vaga não encontrada"
+    ou o padrão regex de zero vagas. A forma da decisão (vazio/fim/falha) é
+    compartilhada via scrapers._paginacao — ver esse módulo para o
+    raciocínio geral.
 
     MEDIDO (2026-08-21) ao vivo, com o MESMO user_agent e init_script do
     scraper (sem eles a Sólides não renderiza nada e a medição não vale):
@@ -69,9 +72,10 @@ def classificar_timeout(corpo: str, pagina: int) -> str:
     timeout, por termo curto, todo ciclo. Fica pra depois: corrigir o alarme
     não depende disso, e mudança a mais é risco a mais.
     """
-    if TEXTO_SEM_RESULTADO in corpo or _PADRAO_ZERO_VAGAS.search(corpo):
-        return "vazio" if pagina == 1 else "fim"
-    return "falha"
+    return interpretar_timeout(
+        pagina_esta_vazia=TEXTO_SEM_RESULTADO in corpo or bool(_PADRAO_ZERO_VAGAS.search(corpo)),
+        pagina=pagina,
+    )
 
 
 class SolidesScraper(BaseScraper):
@@ -121,10 +125,10 @@ class SolidesScraper(BaseScraper):
                             corpo = ""
 
                         situacao = classificar_timeout(corpo, pagina)
-                        if situacao == "vazio":
+                        if situacao == ResultadoPagina.VAZIO:
                             logger.info(f"[Solides] 0 resultados reais para '{termo}'.")
                             sem_resultados = True
-                        elif situacao == "fim":
+                        elif situacao == ResultadoPagina.FIM:
                             logger.info(
                                 f"[Solides] Fim dos resultados de '{termo}': a página "
                                 f"{pagina} não existe (a anterior já era a última)."

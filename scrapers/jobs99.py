@@ -7,6 +7,7 @@ from playwright.sync_api import sync_playwright
 
 from core.job import Job, extrair_data_publicacao
 from core.logger import get_logger
+from scrapers._paginacao import ResultadoPagina, interpretar_timeout
 from scrapers.base import BaseScraper
 
 logger = get_logger()
@@ -20,12 +21,14 @@ _MODALIDADES = {"remota", "híbrida", "hibrida", "presencial"}
 _PADRAO_TOTAL = re.compile(r"foram encontrad\w*\s+(\d+)\s+oportunidade", re.IGNORECASE)
 
 
-def classificar_timeout(corpo: str) -> str:
+def classificar_timeout(corpo: str) -> ResultadoPagina:
     """O que significa estourar o tempo esperando os cards.
 
-    Devolve "vazio" (a busca nao tem resultado nenhum) ou "falha" (a pagina
-    nao carregou, ou carregou dizendo que HA vaga e mesmo assim nao renderizou
-    card nenhum).
+    Detector específico da 99Jobs: lê o total declarado no texto
+    renderizado. A forma da decisão é compartilhada via scrapers._paginacao
+    — aqui sempre com pagina=1, já que a 99Jobs não pagina (uma busca só),
+    então o resultado nunca é FIM, só VAZIO ou FALHA (ver docstring de
+    interpretar_timeout para o porquê).
 
     MEDIDO (2026-08-22): a checagem antiga era
 
@@ -48,9 +51,8 @@ def classificar_timeout(corpo: str) -> str:
     de verdade sempre traz essa frase.
     """
     achado = _PADRAO_TOTAL.search(corpo)
-    if achado is None:
-        return "falha"
-    return "vazio" if achado.group(1) == "0" else "falha"
+    pagina_esta_vazia = achado is not None and achado.group(1) == "0"
+    return interpretar_timeout(pagina_esta_vazia=pagina_esta_vazia, pagina=1)
 
 
 class Jobs99Scraper(BaseScraper):
@@ -102,7 +104,7 @@ class Jobs99Scraper(BaseScraper):
                     except Exception:
                         corpo = ""
 
-                    if classificar_timeout(corpo) == "vazio":
+                    if classificar_timeout(corpo) == ResultadoPagina.VAZIO:
                         logger.info(f"[99Jobs] 0 resultados reais para '{termo}'.")
                         sem_resultados = True
                     else:

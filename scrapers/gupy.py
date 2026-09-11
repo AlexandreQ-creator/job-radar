@@ -5,6 +5,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 
 from core.job import Job, extrair_data_publicacao
 from core.logger import get_logger
+from scrapers._paginacao import ResultadoPagina, interpretar_timeout
 from scrapers.base import BaseScraper
 
 logger = get_logger()
@@ -22,11 +23,12 @@ MAX_PAGINAS = 3
 TEXTO_SEM_RESULTADO = "Nenhum resultado foi encontrado"
 
 
-def classificar_timeout(corpo: str, pagina: int) -> str:
+def classificar_timeout(corpo: str, pagina: int) -> ResultadoPagina:
     """O que significa estourar o tempo esperando os cards de uma página.
 
-    Devolve "vazio" (busca sem resultado nenhum), "fim" (a paginação acabou,
-    a página pedida não existe) ou "falha" (a página não carregou de verdade).
+    Detector específico da Gupy: só procura a frase de "sem resultado" no
+    corpo. A forma da decisão (vazio/fim/falha) é compartilhada via
+    scrapers._paginacao — ver esse módulo para o raciocínio geral.
 
     MEDIDO (2026-08-21): antes desta separação, QUALQUER timeout da página 2
     em diante virava aviso de vaga perdida — e na maioria dos termos do ciclo
@@ -53,9 +55,10 @@ def classificar_timeout(corpo: str, pagina: int) -> str:
     depois — corrigir o alarme não depende disso, e mudança a mais é risco a
     mais.
     """
-    if TEXTO_SEM_RESULTADO in corpo:
-        return "vazio" if pagina == 1 else "fim"
-    return "falha"
+    return interpretar_timeout(
+        pagina_esta_vazia=TEXTO_SEM_RESULTADO in corpo,
+        pagina=pagina,
+    )
 
 
 def _montar_job(card_data: dict) -> Job | None:
@@ -123,10 +126,10 @@ class GupyScraper(BaseScraper):
                             corpo = ""
 
                         situacao = classificar_timeout(corpo, pagina)
-                        if situacao == "vazio":
+                        if situacao == ResultadoPagina.VAZIO:
                             logger.info(f"[Gupy] 0 resultados reais para '{termo}'.")
                             sem_resultados = True
-                        elif situacao == "fim":
+                        elif situacao == ResultadoPagina.FIM:
                             logger.info(
                                 f"[Gupy] Fim dos resultados de '{termo}': a página "
                                 f"{pagina} não existe (a anterior já era a última)."
