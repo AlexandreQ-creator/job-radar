@@ -98,6 +98,26 @@ KEYWORDS_CARGO_FORTE = [
     "Analista de FP&A",
     "FP&A Analyst",
     "Especialista em Estratégia e Inovação em IA",
+    # RECONFIGURADO (2026-09-10): ampliação do eixo de IA a pedido do
+    # usuário — a lista já tinha Governança de IA/Agentic AI/Prompt
+    # Engineering (31/08), mas faltavam termos de mercado mais genéricos que
+    # também aparecem em vaga de Master Data/BI com componente de IA (ex:
+    # "Especialista em Automação de Processos" batendo com RPA/IA).
+    "IA Generativa",
+    "Generative AI",
+    "Especialista em IA",
+    "AI Specialist",
+    "AI Solutions",
+    "Analista de Automação de Processos",
+    "Process Automation Analyst",
+    "Especialista em Automação de Processos",
+    "AI Product Manager",
+    "Gerente de Produto de IA",
+    "Machine Learning Engineer",
+    "Engenheiro de Machine Learning",
+    "MLOps",
+    "AI Consultant",
+    "Consultor de IA",
 ]
 
 # Cargo ambíguo: título que também é usado em vaga sem nada a ver com

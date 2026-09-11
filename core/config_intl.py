@@ -68,6 +68,17 @@ KEYWORDS_INTL = [
     "Prompt Engineer",
     "FP&A Analyst",
     "Commercial Forecast Analyst",
+    # RECONFIGURADO (2026-09-10): ampliação do eixo de IA a pedido do
+    # usuário — mesmos termos adicionados em config.py (ver comentário lá),
+    # em inglês, pro perfil internacional.
+    "Generative AI",
+    "AI Specialist",
+    "AI Solutions",
+    "Process Automation Analyst",
+    "AI Product Manager",
+    "Machine Learning Engineer",
+    "MLOps",
+    "AI Consultant",
 ]
 
 # Termos de busca: cargo + sinal de idioma (português/espanhol/bilíngue) ou
@@ -159,6 +170,16 @@ TERMOS_BUSCA_INTL = [
     "prompt engineer",
     "fp&a analyst",
     "commercial forecast analyst",
+    # RECONFIGURADO (2026-09-10) — ver os mesmos termos em KEYWORDS_INTL
+    # acima, ampliação do eixo de IA a pedido do usuário.
+    "generative ai",
+    "ai specialist",
+    "ai solutions",
+    "process automation analyst",
+    "ai product manager",
+    "machine learning engineer",
+    "mlops",
+    "ai consultant",
 ]
 
 # MEDIDO: filtro de cargo (KEYWORDS_INTL) nunca checou idioma — a exigência
