@@ -165,12 +165,19 @@ CASOS_COMBINA_COM = [
     # cargo batendo.
     ("cidade-fora-da-lista-barrada", "Analista de Dados", "Nova York", "Presencial", PERFIL_BR, False),
     ("cargo-fora-do-escopo-barrado", "Vendedor Externo", "Recife, PE", "Presencial", PERFIL_BR, False),
-    ("cargo-forte-cidade-aceita-passa", "Analista de Dados Pleno", "Recife, PE", "Presencial", PERFIL_BR, True),
+    # Cidade trocada de Recife pra Sao Paulo em 2026-09-13 (ver ADR-0001):
+    # Recife deixou de ser aceita pelo perfil atual em 2026-08-31, entao
+    # este caso (que testa a logica de CARGO, esperado=True) precisa de
+    # uma cidade aceita pra nao ser barrado por um motivo que nao e o
+    # que o teste pretende verificar. Os dois casos "barrado" acima/abaixo
+    # continuam em Recife de proposito -- ja esperam False, entao a cidade
+    # nao aceita so reforca o resultado, nao contamina o teste.
+    ("cargo-forte-cidade-aceita-passa", "Analista de Dados Pleno", "São Paulo, SP", "Presencial", PERFIL_BR, True),
     # keywords_ambiguo (ex: "Business Analyst") só conta com qualificador
     # de dados junto no título — sozinho é ruído de outra área (RH,
     # finanças).
     ("cargo-ambiguo-sem-qualificador-barrado", "Business Analyst", "Recife, PE", "Presencial", PERFIL_BR, False),
-    ("cargo-ambiguo-com-qualificador-passa", "Business Analyst com SQL", "Recife, PE", "Presencial", PERFIL_BR, True),
+    ("cargo-ambiguo-com-qualificador-passa", "Business Analyst com SQL", "São Paulo, SP", "Presencial", PERFIL_BR, True),
 ]
 
 
