@@ -10,3 +10,8 @@ data/*.db-wal
 data/*.db-shm
 _to_delete/
 .pytest_cache/
+.scratch/
+CLAUDE.md
+docs/
+last_pid.txt
+last_run_info.txt
