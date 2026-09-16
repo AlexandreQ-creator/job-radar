@@ -15,3 +15,7 @@ CLAUDE.md
 docs/
 last_pid.txt
 last_run_info.txt
+aprendizados-sessao-*.md
+LICOES_APRENDIDAS.md
+consolidar-aprendizados.py
+audit-outputs/

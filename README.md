@@ -9,7 +9,7 @@
 ![Playwright](https://img.shields.io/badge/Playwright-Scraping-2EAD33?style=for-the-badge&logo=playwright&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-Banco%20versionado-07405E?style=for-the-badge&logo=sqlite&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Cron-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)
-![Tests](https://img.shields.io/badge/testes-381%2F465%20passando-yellow?style=for-the-badge)
+![Tests](https://img.shields.io/badge/testes-398%2F477%20passando-yellow?style=for-the-badge)
 ![Status](https://img.shields.io/badge/status-em%20produção-success?style=for-the-badge)
 
 **Autora original:** Liliam Kezia Oliveira Souza
@@ -39,7 +39,7 @@ Entre 07 e 15 de agosto, o sistema já processou **1.052 vagas únicas**, sem in
 |---|---|
 | 📊 Vagas processadas (deduplicadas) | **1.052** |
 | 🔗 Concentração numa única fonte (LinkedIn) | **89,5%** |
-| 🧪 Casos de teste parametrizados (465 instâncias no total; 84 falham hoje por débito de reconfiguração — ver seção Testes) | **78** |
+| 🧪 Casos de teste parametrizados (477 instâncias no total; 79 falham hoje por débito de reconfiguração — ver seção Testes) | **78** |
 | 🌎 Fontes monitoradas em paralelo | **8** |
 | ⏱️ Frequência de checagem | **a cada 3h** |
 | 💰 Custo de infraestrutura | **R$ 0** |
@@ -84,7 +84,7 @@ Vaga de alta relevância chega na hora, com motivo da aprovação, nível e link
 - **Score de relevância sem ML:** 5 sinais conhecidos (cargo, ferramenta, senioridade, mercado, idioma), pesos calibrados contra o histórico real do banco, não chutados.
 - **Zero infraestrutura:** GitHub Actions como motor de cron, SQLite como banco — versionado no próprio Git, o histórico de vagas já vistas *é* o commit.
 - **Resiliente:** nunca marca vaga como "vista" sem confirmar que a notificação saiu; alerta automático se metade das fontes falhar num ciclo; heartbeat diário confirmando que o robô ainda está de pé.
-- **78 casos de teste automatizados em CI:** cada caso documenta um bug real já corrigido nesta base — não é cenário hipotético, é regressão registrada (84 das 465 instâncias parametrizadas estão em débito conhecido — ver seção Testes).
+- **78 casos de teste automatizados em CI:** cada caso documenta um bug real já corrigido nesta base — não é cenário hipotético, é regressão registrada (79 das 477 instâncias parametrizadas estão em débito conhecido — ver seção Testes).
 
 ## 🤖 Resumo de vaga por IA (opcional)
 
@@ -141,9 +141,9 @@ python main.py --perfil brasil internacional --once
 pytest tests/ -v
 ```
 
-78 casos parametrizados (465 instâncias, contando cada combinação de parâmetro), cobrindo a camada de filtro, o parsing de callback do Telegram, o relatório de precisão e o resumo por IA — todos rodando automaticamente a cada push via GitHub Actions.
+78 casos parametrizados (477 instâncias, contando cada combinação de parâmetro), cobrindo a camada de filtro, o parsing de callback do Telegram, o relatório de precisão e o resumo por IA — todos rodando automaticamente a cada push via GitHub Actions.
 
-**Débito conhecido, não escondido:** 84 dessas instâncias falham hoje (`test_regras_de_negocio.py`, `test_uf_por_extenso.py` e parte de `test_filtro.py`/`test_escopo_localizacao.py`/`test_senior.py`) porque fixam o comportamento do perfil *anterior* de Liliam (cidades do Nordeste aceitas, EUA/Reino Unido rejeitados, Júnior/Pleno priorizado) — exatamente o oposto do que o perfil reconfigurado de Alexandre quer. Não são bugs novos: são regressão esperada de uma reconfiguração de perfil que ainda não teve a suíte reescrita para o novo alvo. Decisão consciente de não reescrever ainda (ver commit history) — bom primeiro contato para quem quiser contribuir.
+**Débito conhecido, não escondido:** 79 dessas instâncias falham hoje (`test_regras_de_negocio.py`, `test_uf_por_extenso.py` e `test_senior.py`) porque fixam o comportamento do perfil *anterior* de Liliam (cidades do Nordeste aceitas, EUA/Reino Unido rejeitados, Júnior/Pleno priorizado) — exatamente o oposto do que o perfil reconfigurado de Alexandre quer. Não são bugs novos: são regressão esperada de uma reconfiguração de perfil que ainda não teve a suíte reescrita para o novo alvo. `test_filtro.py`/`test_escopo_localizacao.py` já foram corrigidos (ver `docs/adr/0001-cidades-sao-paulo-somente.md`). Decisão consciente de não reescrever os 3 arquivos restantes ainda (ver commit history) — bom primeiro contato para quem quiser contribuir.
 
 ---
 
