@@ -78,6 +78,21 @@ Vaga de alta relevância chega na hora, com motivo da aprovação, nível e link
 | **Notifica** | Alta relevância na hora; o resto num resumo diário ranqueado, melhor vaga no topo |
 | **Aprende** | Botão 👍/👎 em cada notificação — feedback vira dado pra medir precisão por fonte e por semana |
 
+```mermaid
+flowchart LR
+    A[8 fontes<br/>LinkedIn, Gupy, Indeed...] -->|scrapers em paralelo| B[Filtro em 3 níveis<br/>cargo · cidade/mercado · idioma]
+    B --> C[Score 0-10<br/>sem ML]
+    C --> D[Dedup<br/>link + empresa/título]
+    D --> E{Score alto?}
+    E -->|sim| F[Notificação imediata]
+    E -->|não| G[Digest diário ranqueado]
+    F --> H[👍 / 👎 no Telegram]
+    G --> H
+    H -->|feedback| I[Relatório de precisão<br/>por fonte e semana]
+    C -.opcional.-> J[Resumo por IA<br/>Claude Haiku]
+    J -.explica a decisão, não muda o score.-> F
+```
+
 ## 🏗️ Arquitetura técnica
 
 - **Filtro em 3 níveis de confiança:** cargo inequívoco passa sozinho; cargo ambíguo (ex: "Business Analyst") só conta com qualificador de dados junto no título; ferramenta (ex: "Power BI") só conta com palavra de cargo junto — nada aprova por palavra-chave solta.
@@ -96,7 +111,7 @@ Sem `ANTHROPIC_API_KEY` configurada no `.env`, `core/ia_resumo.py::gerar_resumo(
 
 ## 📁 Estrutura do repositório
 
-obradar/
+jobradar/
 ├── README.md
 ├── requirements.txt
 ├── main.py ← motor único: um ciclo de busca por perfil
